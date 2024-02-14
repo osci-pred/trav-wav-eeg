@@ -146,6 +146,7 @@ end
 id = nan(nTm,nTr);
 pow = nan(nTm,nTr);
 rcc_sq = nan(nTm,nTr);
+phi_out = nan(size(pos,1), nTm, nTr);
 wb = waitbar(0, {sprintf('Wave Fit: Trial %d/%d', 1,nTr), '~~~ >> ??? << ~~~'});
 for itrial = 1:nTr
     waitbar(itrial/nTr,wb, {sprintf('Wave Fit: Trial %d/%d', itrial,nTr), '~~~ >> ??? << ~~~'});
@@ -158,10 +159,12 @@ for itrial = 1:nTr
             ./sqrt(...
             sum(sin(aphi-circ_mean(aphi)).^2) .* sum(sin(bestfit-circ_mean(bestfit)).^2)); % circular correlation for best fit
         rcc_sq(iT,itrial) = rcc_sq(iT,itrial)^2; 
+        phi_out(:,iT,itrial) = aphi;
     end
 end
 delete(wb);
 
+phi_out = phi_out - circ_mean(phi_out, [], 1); % recenter on zero after moving mean
 
 %%
 out.t = time;
@@ -176,7 +179,7 @@ out.midLineIdx = midLine;
 out.midLineIdxInData = midLineIdxInData;
 out.midLineLabel = midLineLabel;
 out.pow = pow;
-
+out.phi = phi_out;
 
 %%
 end
