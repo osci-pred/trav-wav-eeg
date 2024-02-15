@@ -28,9 +28,16 @@ p.addParameter('NumStepsWaveDir', 60);
 
 p.parse(varargin{:});
 
-
+%%
 raw = double(raw);
 sr = round(1/diff(time(1:2)));
+
+% convert moving-avg windows size to samples:
+if ~isempty(p.Results.WindowSize)
+    movMeanWinSize = (p.Results.WindowSize/1e3) .* sr;
+else
+    movMeanWinSize = [];
+end
 
 %%
 
@@ -50,7 +57,7 @@ sr = round(1/diff(time(1:2)));
 % -> first dimension for each is the number of different fits
 
 % Evaluate the fits:
-[id, rcc_sq, phi_out] = tw_evalPlaneFits(phi, phiPred, (p.Results.WindowSize/1e3) .* sr);
+[id, rcc_sq, phi_out] = tw_evalPlaneFits(phi, phiPred, movMeanWinSize);
  
 
 
