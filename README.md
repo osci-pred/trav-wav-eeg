@@ -8,6 +8,6 @@ use as:
 
 wav = tw_fitPlaneEEG(eeg, time, channelLabels, 'Frequency', [7 13]);
 
-where eeg is the raw data as [chan x timepoints x trials]
-time is the corresponding time vector in seconds
+where eeg is the raw data as [chan x timepoints x trials]  
+time is the corresponding time vector in seconds  
 channelLabels is a cell array of channel labels corresponding to first input dimension
