@@ -6,6 +6,9 @@ function [id, rcc_sq, phi_out] = tw_evalPlaneFits(phi, phiPred, movMeanWinSize)
 % Returned id is the index of the best fit for each time-point, with the same
 % [nTime x nTrial] dimensions as input
 
+%%
+nTr = size(phi,3);
+nTm = size(phi,2);
 
 %%
 if nargin < 3 || isempty(movMeanWinSize)
@@ -16,9 +19,6 @@ end
 
 
 
-%%
-nTr = size(phi,3);
-nTm = size(phi,2);
 
 %%
 id = nan(nTm,nTr);
