@@ -1,0 +1,93 @@
+function src = sim_getSource(varargin)
+% get dipole sources for simulation
+
+switch type
+    case 'Sine'
+        src = sineWave(varargin{:});
+    case 'ERP'
+        src = erp(varargin{:});
+end
+
+end
+%%
+function out = sineWave(varargin)
+p = inputParser;
+p.addParameter('numSources', 1); % number of sources
+p.addParameter('Dur', 1e3); % duration in ms
+p.addParameter('Frequency', 10); % time step 1ms assumed
+p.addParameter('PhaseOffset', 0); % in radians
+p.addParameter('Baseline', 0); % corresponding to off state
+p.addParameter('Offset', 0); % corresponding to mean of sine
+p.addParameter('On', [-Inf Inf]); % on times (ouside is baseline)
+p.addParameter('Scale', 20); % Peak to trough
+
+if nargin==1 && ischar(dur) && strcmpi(dur, 'help')
+    p.parse();
+    out = p.Results;
+    return
+else
+    p.parse(varargin{:});
+end
+
+on = p.Results.On;
+if ~iscell(on)
+    on = {on};
+end
+
+val = p.Results.Scale;
+
+t = 1:p.Results.Dur;
+
+out = ones(1,dur).*p.Results.Baseline;
+for ievent = 1:numel(on)
+    out(rngfn(t, on{ievent})) = 1;
+end
+
+out = out .* (sin((2*pi*p.Results.Frequency/1e3).*t + p.Results.PhaseOffset) .* val/2 + val/2 + p.Results.Offset);
+
+end
+%%
+function out = erp(varargin)
+p = inputParser;
+p.addParameter('Dur', 1.2e3); % duration
+p.addParameter('Baseline', 0); % corresponding to off state
+p.addParameter('Onset', 2e2); % on times (ouside is baseline)
+p.addParameter('Scale', 20); % Peak
+
+if nargin==1 && ischar(dur) && strcmpi(dur, 'help')
+    p.parse();
+    out = p.Results;
+    return
+else
+    p.parse(varargin{:});
+end
+
+on = p.Results.On;
+if ~iscell(on)
+    on = {on};
+end
+
+t = (1:p.Results.Dur) - p.Results.Onset;
+
+modHi = normpdf(t, 150, 50);
+sinHi = sin(2*pi*(5.6).*(t)./1e3 + 0.8);
+modLo = 1.1.*normpdf(t, 350, 150);
+sinLo = sin(2*pi*(2.9).*(t)./1e3);
+
+template = modHi.*sinHi + modLo.*sinLo;
+template = template
+val = p.Results.Scale;
+
+out = ones(1,dur).*p.Results.Baseline;
+for ievent = 1:numel(on)
+    out(rngfn(t, on{ievent})) = 1;
+end
+
+out = out .* rand(1,numel(t)) .* val;
+
+end
+%%
+function out = rngfn(vec, rng)
+% check where array is in range
+out = vec >= rng(1) & vec < rng(2);
+end
