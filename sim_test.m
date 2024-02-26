@@ -22,8 +22,9 @@ end
 % project to 3D EEG elec positions:
 projArgs = {...
     'SourceAlignElec', 'POz',...
-    'NumNoiseSources', 5,...
-    'snrRange', [1.5 4],...
+    'NumNoiseSources', 8,...
+    'snrRange', [1.2 3],...
+    'Plot', true,...
     };
 
 [eeg, t, elecLbl] = sim_eegProjection(src, t, projArgs{:});
@@ -44,7 +45,21 @@ wav = tw_fitPlaneEEG(eeg, t, elecLbl, fitParam{:});
 isfw = @(x) abs(x+pi/2) < 0.5;
 isbw = @(x) abs(x-pi/2) < 0.5;
 
+%% plot 
+figure
+tiledlayout(3,1)
 
+nexttile(1)
+plot(t, squeeze(src));
+
+nexttile(2)
+plot(t, squeeze(eeg(:,:,1)));
+
+nexttile(3)
 plot(wav.t, mean(isfw(wav.wavDir),2), 'r');
 hold on
 plot(wav.t, mean(isbw(wav.wavDir),2), 'b');
+legend({'FW' 'BW'})
+ylabel('Prob.')
+xlabel('Time [sec]')
+

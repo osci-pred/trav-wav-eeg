@@ -11,6 +11,7 @@ p.addParameter('ChansAP', {'I', 'O', 'PO', 'P', 'CP', 'C', 'FC', 'F'});
 p.addParameter('ChansML', {'3' '1' 'z' '2' '4'});
 p.addParameter('ElecCxDist', 20); % in mm
 p.addParameter('SrcRadius', 5); % size of source in mm
+p.addParameter('Plot', false);
 
 if nargin==1 && ischar(src) && strcmpi(src, 'help')
     p.parse();
@@ -102,27 +103,28 @@ for iSrc = 1:nSrc
     srcFilt(:,iSrc) = propFun(dist); % spatial filter (in elec space) for this source
 end
 % 
-% %% Plot source projections to the electrodes
-% tiledlayout(1,size(srcFilt,2))
-% if doplot
-%     for iSrc = 1:nSrc
-%         nexttile
-%         scatter3(elecPos(:,1), elecPos(:,2), elecPos(:,3), 100, 'k.');
-%         hold on
-%         %         scatter3(elecPos(:,1), elecPos(:,2), elecPos(:,3), 0.5+srcFilt(:,iSrc).*4e3, srcFilt(:,iSrc).*4e3, '.');
-%         axis off
-%         gpa.surfir(elecPos(2:end,1), elecPos(2:end,2), elecPos(2:end,3), srcFilt(2:end,iSrc));
-%         alpha 0.8
-%         gpa.surfir(cxPos(2:end,1), cxPos(2:end,2), cxPos(2:end,3), 0.*srcFilt(2:end,iSrc));
-%         colormap(brewermap(64, '*RdBu'));
-%         cxLine = linspace(cxBounds(1), cxBounds(2), 1e3)';
-%         cxLine = cxMidLine(cxLine);
-%         plot3(cxLine(:,1), cxLine(:,2), cxLine(:,3), 'w', 'LineWidth', 2)
-%         for iElec = 1:numel(midLine)
-%             text(elecPos(midLine(iElec),1), elecPos(midLine(iElec),2), elecPos(midLine(iElec),3), elecLbl{midLine(iElec)})
-%         end
-%     end
-% end
+%% Plot source projections to the electrodes
+if p.Results.Plot
+    figure
+    tiledlayout(1,size(srcFilt,2))
+    for iSrc = 1:nSrc
+        nexttile
+        scatter3(elecPos(:,1), elecPos(:,2), elecPos(:,3), 100, 'k.');
+        hold on
+        %         scatter3(elecPos(:,1), elecPos(:,2), elecPos(:,3), 0.5+srcFilt(:,iSrc).*4e3, srcFilt(:,iSrc).*4e3, '.');
+        axis off
+        gpa.surfir(elecPos(2:end,1), elecPos(2:end,2), elecPos(2:end,3), srcFilt(2:end,iSrc));
+        alpha 0.8
+        gpa.surfir(cxPos(2:end,1), cxPos(2:end,2), cxPos(2:end,3), 0.*srcFilt(2:end,iSrc));
+        colormap(brewermap(64, '*RdBu'));
+        cxLine = linspace(cxBounds(1), cxBounds(2), 1e3)';
+        cxLine = cxMidLine(cxLine);
+        plot3(cxLine(:,1), cxLine(:,2), cxLine(:,3), 'w', 'LineWidth', 2)
+        for iElec = 1:numel(midLine)
+            text(elecPos(midLine(iElec),1), elecPos(midLine(iElec),2), elecPos(midLine(iElec),3), elecLbl{midLine(iElec)})
+        end
+    end
+end
 
 %% Get noise projections:
 % pick electrode at random for each noise source
@@ -144,14 +146,15 @@ end
 
 
 % 
-% %% plot midline
-% if doplot
-%     figure
-%     nexttile
-%     imagesc(in.t, 1:numel(midLine), eeg(:,midLine)')
-%     nexttile
-%     plot(in.t, eeg(:,midLine))
-% end
+%% plot midline
+if p.Results.Plot
+    figure
+    tiledlayout(2,1)
+    nexttile(1)
+    imagesc(t, 1:numel(midLine), eeg(midLine,:,1))
+    nexttile(2)
+    plot(t, eeg(midLine,:,1)')
+end
 %%
 % keyboard
 end
