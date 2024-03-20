@@ -109,6 +109,7 @@ out.rcc_sq = rcc_sq;
 out.rcc_sq_rand = rcc_sq_rand(:,shuffleTrials,:);
 out.rcc_sq_rand = out.rcc_sq_rand(shTm, :,:);
 out.rand_trials = shuffleTrials;
+out.rand_t = out.t(shTm);
 out.rcc_thresh = prctile(out.rcc_sq_rand(:), 99);
 out.sig = out.rcc_sq > out.rcc_thresh;
 
