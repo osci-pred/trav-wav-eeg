@@ -95,6 +95,9 @@ out.rand_trials = shuffleTrials;
 out.rcc_thresh = prctile(out.rcc_sq_rand(:), 99);
 out.sig = out.rcc_sq > out.rcc_thresh;
 
+out.pFitFW = mean(out.sig & out.fw,2);
+out.pFitBW = mean(out.sig & out.bw,2);
+
 out.midLineIdx = midLine;
 out.midLineIdxInData = midLineIdxInData;
 out.midLineLabel = midLineLabel;
