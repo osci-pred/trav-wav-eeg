@@ -17,6 +17,13 @@ function out = tw_fitPlaneEEG(raw, time, labels, varargin)
 %                       default 30
 % 'NumStepsWaveDir'     number of steps for wave direction [-pi pi],
 %                       default 60
+% 'RandShuffleIter'     number of iterations for random
+%                       shuffling to estimate the chance level of
+%                       rcc_square.
+% 'RandShuffleNTrials'  number of trials to perform random shuffling on. If
+%                       empty, all trials 
+% 'DirClassWindowSize'  window size for classification of wave direction (in radians)
+
 
 p = inputParser();
 p.addParameter('Frequency', [7 13]); 
@@ -25,6 +32,9 @@ p.addParameter('WindowSize', []);
 p.addParameter('MaxCycles', 1); 
 p.addParameter('NumStepsSpatFreq', 30); 
 p.addParameter('NumStepsWaveDir', 60); 
+p.addParameter('RandShuffleIter', 5); 
+p.addParameter('RandShuffleNTrials', 10);
+p.addParameter('DirClassWindowSize', 0.5); 
 
 p.parse(varargin{:});
 
@@ -38,6 +48,9 @@ if ~isempty(p.Results.WindowSize)
 else
     movMeanWinSize = [];
 end
+
+shuffleTrials = sort(randsample(1:size(raw,3),...
+    min(size(raw,3), p.Results.RandShuffleNTrials)));
 
 %%
 
@@ -57,19 +70,31 @@ end
 % -> first dimension for each is the number of different fits
 
 % Evaluate the fits:
-[id, rcc_sq, phi_out] = tw_evalPlaneFits(phi, phiPred, movMeanWinSize);
+[id, rcc_sq, rcc_sq_rand, phi_out] = tw_evalPlaneFits(phi, phiPred, movMeanWinSize,...
+    p.Results.RandShuffleIter, shuffleTrials);
  
+[fw, bw] = tw_classifyDirection(wvdir(id), p.Results.DirClassWindowSize);
 
+%% 
 
 %%
 out.t = time;
+out.fw = fw;
+out.bw = bw;
+
 out.lbl = lbl;
 out.pos = pos;
 out.xi = xi(id);
 out.a = a(id);
 out.b = b(id);
 out.wavDir = wvdir(id);
+
 out.rcc_sq = rcc_sq;
+out.rcc_sq_rand = rcc_sq_rand(:,shuffleTrials,:);
+out.rand_trials = shuffleTrials;
+out.rcc_thresh = prctile(out.rcc_sq_rand(:), 99);
+out.sig = out.rcc_sq > out.rcc_thresh;
+
 out.midLineIdx = midLine;
 out.midLineIdxInData = midLineIdxInData;
 out.midLineLabel = midLineLabel;
