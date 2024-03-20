@@ -7,9 +7,9 @@ function out = tw_fitPlaneEEG(raw, time, labels, varargin)
 % Optional Input (as named arg list):
 %
 % 'Frequency'           temporal freq limits [fmin fmax] used for bp filter
-% 'ROI'                 defines limits of electrode region to be used for the fit 
+% 'ROI'                 defines limits of electrode region to be used for the fit
 %                       (see fieldtrip layout EEG1005)
-% 'WindowSize'          temporal window size (ms) used to average relative phase 
+% 'WindowSize'          temporal window size (ms) used to average relative phase
 %                       (leave empty if single-point)
 % 'MaxCycles'           max. spatial frequency, defined as number of cycles
 %                       within the covered electrode space, default 1 cycle
@@ -21,25 +21,29 @@ function out = tw_fitPlaneEEG(raw, time, labels, varargin)
 %                       shuffling to estimate the chance level of
 %                       rcc_square.
 % 'RandShuffleNTrials'  number of trials to perform random shuffling on. If
-%                       empty, all trials 
+%                       empty, all trials
 % 'DirClassWindowSize'  window size for classification of wave direction (in radians)
+% 'RandShuffleTimeStep' time step option for shuffling, in ms. 
 
 
 p = inputParser();
-p.addParameter('Frequency', [7 13]); 
+p.addParameter('Frequency', [7 13]);
 p.addParameter('ROI', {[-0.2 0.2] [-Inf 0.25]});
-p.addParameter('WindowSize', []); 
-p.addParameter('MaxCycles', 1); 
-p.addParameter('NumStepsSpatFreq', 30); 
-p.addParameter('NumStepsWaveDir', 60); 
-p.addParameter('RandShuffleIter', 5); 
-p.addParameter('RandShuffleNTrials', 10);
-p.addParameter('DirClassWindowSize', 0.5); 
+p.addParameter('WindowSize', []);
+p.addParameter('MaxCycles', 1);
+p.addParameter('NumStepsSpatFreq', 30);
+p.addParameter('NumStepsWaveDir', 60);
+p.addParameter('RandShuffleIter', 10);
+p.addParameter('RandShuffleNTrials', []);
+p.addParameter('RandShuffleTimeStep', 200); % in ms
+p.addParameter('DirClassWindowSize', 0.5);
 
 p.parse(varargin{:});
 
 %%
 raw = double(raw);
+nTr = size(raw,3);
+nTm = size(raw,2);
 sr = round(1/diff(time(1:2)));
 
 % convert moving-avg windows size to samples:
@@ -49,8 +53,20 @@ else
     movMeanWinSize = [];
 end
 
-shuffleTrials = sort(randsample(1:size(raw,3),...
-    min(size(raw,3), p.Results.RandShuffleNTrials)));
+if isempty(p.Results.RandShuffleNTrials)
+    shuffleTrials = 1:nTr;
+else
+    shuffleTrials = sort(randsample(1:size(raw,3),...
+        min(nTr, p.Results.RandShuffleNTrials)));
+end
+
+if ~isempty(p.Results.RandShuffleTimeStep)
+    shStep = round((p.Results.RandShuffleTimeStep/1e3) .* sr);
+    
+    shTm = shStep:shStep:nTm;
+else
+    shTm = 1:nTm;
+end
 
 %%
 
@@ -71,11 +87,11 @@ shuffleTrials = sort(randsample(1:size(raw,3),...
 
 % Evaluate the fits:
 [id, rcc_sq, rcc_sq_rand, phi_out] = tw_evalPlaneFits(phi, phiPred, movMeanWinSize,...
-    p.Results.RandShuffleIter, shuffleTrials);
- 
+    p.Results.RandShuffleIter, shuffleTrials, shTm);
+
 [fw, bw] = tw_classifyDirection(wvdir(id), p.Results.DirClassWindowSize);
 
-%% 
+%%
 
 %%
 out.t = time;
@@ -91,6 +107,7 @@ out.wavDir = wvdir(id);
 
 out.rcc_sq = rcc_sq;
 out.rcc_sq_rand = rcc_sq_rand(:,shuffleTrials,:);
+out.rcc_sq_rand = out.rcc_sq_rand(shTm, :,:);
 out.rand_trials = shuffleTrials;
 out.rcc_thresh = prctile(out.rcc_sq_rand(:), 99);
 out.sig = out.rcc_sq > out.rcc_thresh;

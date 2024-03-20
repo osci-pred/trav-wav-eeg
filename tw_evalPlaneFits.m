@@ -1,4 +1,4 @@
-function [id, rcc_sq, rcc_sq_rand, phi_out] = tw_evalPlaneFits(phi, phiPred, movMeanWinSize, nIter, shuffleTrials)
+function [id, rcc_sq, rcc_sq_rand, phi_out] = tw_evalPlaneFits(phi, phiPred, movMeanWinSize, nIter, shuffleTrials, shTm)
 % compares predicted phases in phiPred to actual phases in phi, after
 % applying moving-mean of window size movMeanWinSize (in samples, not ms);
 % phases in phi must be relative (e.g. to mean phase across electrode) if
@@ -42,7 +42,7 @@ for itrial = 1:nTr
     end
     
     if ismember(itrial, shuffleTrials)
-        for iT = 1:nTm
+        for iT = shTm
             for iter = 1:nIter
                 rphi = squeeze(circ_mean(phi_rand(:,movAvgIdx(iT),itrial,iter), [], 2));
                 [~, rcc_sq_rand(iT,itrial,iter)] = singleFitEval(rphi, phiPred);
