@@ -73,7 +73,6 @@ end
 % Get the electrode positions that we want to include in the fit:
 [pos, lbl, idxInData] = tw_getElecPos(labels, 'EEG1005', p.Results.ROI);
 
-
 % Get the indices for the midline electrodes (not used in the fit):
 [midLine, midLineLabel, midLineIdxInData] = tw_getMidLine(lbl, idxInData);
 
@@ -91,7 +90,6 @@ end
 
 [fw, bw] = tw_classifyDirection(wvdir(id), p.Results.DirClassWindowSize);
 
-%%
 
 %%
 out.t = time;

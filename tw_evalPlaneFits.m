@@ -21,8 +21,20 @@ if nargin < 4 || isempty(nIter)
 end
 
 %% Random shuffling:
-for iter = 1:nIter
-    phi_rand(:,:,:,iter) = phi(randperm(size(phi,1)),:,:);
+if size(phi,1) >= 10
+    for iter = 1:nIter
+        phi_rand(:,:,:,iter) = phi(randperm(size(phi,1)),:,:);
+    end
+else
+    % for small channel counts (mostly modeling) we make sure that no two shufflings are identical
+    assert(nIter < factorial(size(phi,1)),...
+        'Number of iterations is greater than number of possible permutations')
+    rperm = perms(1:size(phi,1));
+    rperm = rperm(randsample(1:size(rperm,1), nIter),:);
+    
+    for iter = 1:nIter
+        phi_rand(:,:,:,iter) = phi(rperm(iter,:),:,:);
+    end
 end
 
 %%
