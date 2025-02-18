@@ -35,7 +35,8 @@ fwMaxBoot = mean(fwMaxBoot,4);
 bwMaxBoot = mean(bwMaxBoot,4);
 % midlineBoot = mean(midlineBoot,4);
 
-
+out.fwRaw = fwMax;
+out.bwRaw = bwMax;
 out.fw = 10.*log10(fwMax./fwMaxBoot);
 out.bw = 10.*log10(bwMax./bwMaxBoot);
 out.freq = freq;

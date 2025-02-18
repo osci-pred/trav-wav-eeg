@@ -7,8 +7,10 @@ function out = tw_fitPlaneEEG(raw, time, labels, varargin)
 % Optional Input (as named arg list):
 %
 % 'Frequency'           temporal freq limits [fmin fmax] used for bp filter
-% 'ROI'                 defines limits of electrode region to be used for the fit
-%                       (see fieldtrip layout EEG1005)
+% 'ROI'                 defines electrode ROI to be used for the fit
+%                       (see fieldtrip layout EEG1005). Can be either in
+%                       coordinates as {[ml_min ml_max] [ap_min ap_max]},
+%                       or as a simple cell array of electrodes to include
 % 'WindowSize'          temporal window size (ms) used to average relative phase
 %                       (leave empty if single-point)
 % 'MaxCycles'           max. spatial frequency, defined as number of cycles
