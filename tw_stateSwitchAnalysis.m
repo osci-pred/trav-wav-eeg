@@ -168,6 +168,8 @@ for iTr = 1:nTr
             
         end
     end
+    
+    out.tag{iTr} = out.tag{iTr}(:,[2 1]); % flip so that first column is preceding state
 end
 out.tagLabels = {'fw' 'bw'};
 
