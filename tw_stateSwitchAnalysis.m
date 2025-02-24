@@ -70,7 +70,7 @@ for iTr = 1:nTr
 %             alpha 0.3
 %         end
 %         xline(out.trans, 'k:')
-    keyboard
+%         keyboard
 end
 
 
