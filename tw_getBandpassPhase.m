@@ -44,8 +44,11 @@ for itrial = 1:nTr
     phi(:,:,itrial) = angle(h)';
     pow(:,itrial) = mean(abs(h),2);
 end
+
 phi = phi - circ_mean(phi, [], 1); % subtract mean across elecs per timepoint
 % -> now we can average over time (within short windows)
 
+
+phi = exp(1i.*phi);
 
 end

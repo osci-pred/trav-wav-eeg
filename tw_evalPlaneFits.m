@@ -37,45 +37,73 @@ else
     end
 end
 
+phi_rand = phi_rand(:,:,shuffleTrials,:); % limit to the trialset we want
+
 %%
 id = nan(nTm,nTr);
 rcc_sq = nan(nTm,nTr);
-rcc_sq_rand = nan(nTm,nTr,nIter);
+rcc_sq_rand = nan(nTm,numel(shuffleTrials),nIter);
 phi_out = nan(size(phi,1), nTm, nTr);
 
-wb = waitbar(0, {sprintf('Wave Fit: Trial %d/%d', 1,nTr), '~~~ >> ??? << ~~~'});
+wb = waitbar(0, {sprintf('Wave Fit: Timepoint %d/%d', 0,nTm), '~~~ >> ??? << ~~~'});
 
-for itrial = 1:nTr
-    waitbar(itrial/nTr,wb, {sprintf('Wave Fit: Trial %d/%d', itrial,nTr), '~~~ >> ??? << ~~~'});
-    for iT = 1:nTm
-        aphi = squeeze(circ_mean(phi(:,movAvgIdx(iT),itrial), [], 2));
-        [id(iT,itrial), rcc_sq(iT,itrial)] = singleFitEval(aphi, phiPred);
-        phi_out(:,iT,itrial) = aphi;
-    end
+phiPred = repmat(phiPred, 1,1,nTr); % expand predicted phases to trial dimension
+phiPred = permute(phiPred, [2 3 1]); % move fit dimension to the end
+
+for iT = 1:nTm
+    waitbar(iT/nTm,wb, {sprintf('Wave Fit: Timepoint %d/%d', iT, nTm), '~~~ >> ??? << ~~~'});
     
-    if ismember(itrial, shuffleTrials)
-        for iT = shTm
-            for iter = 1:nIter
-                rphi = squeeze(circ_mean(phi_rand(:,movAvgIdx(iT),itrial,iter), [], 2));
-                [~, rcc_sq_rand(iT,itrial,iter)] = singleFitEval(rphi, phiPred);
-            end
-        end
-    end
+    aphi = squeeze(mean(phi(:,movAvgIdx(iT),:), 2));
+    aphi = aphi./abs(aphi); % discard magnitude of moving mean angle
     
+    [id(iT,:), rcc_sq(iT,:)] = singleFitEval(aphi, phiPred);
+    phi_out(:,iT,:) = aphi;
 end
+
+for iT = shTm
+    waitbar(iT/nTm, wb, {sprintf('Estimating random distribution: Timepoint %d/%d', iT, nTm), '~~~ >> ??? << ~~~'});
+
+    for iter = 1:nIter
+                
+        rphi = squeeze(mean(phi_rand(:,movAvgIdx(iT),:,iter), 2));
+        rphi = rphi./abs(rphi); % discard magnitude of moving mean angle
+        
+        [~, rcc_sq_rand(iT,:,iter)] = singleFitEval(rphi, phiPred);
+    end
+end
+
+    
 
 delete(wb);
 
-phi_out = phi_out - circ_mean(phi_out, [], 1); % recenter on zero after moving mean
+phi_out = angle(phi_out./mean(phi_out,1)); % recenter on zero after moving mean
 
 end
 %%
 function [id, rcc_sq] = singleFitEval(aphi, phiPred)
-gof = sqrt(mean(cos(phiPred'-aphi)).^2 + mean(sin(phiPred'-aphi)).^2); % mean vector length of residuals (-> ie offset is ignored)
-[~,id] = max(gof); % get best fit ID
-bestfit = phiPred(id,:)'; % get predicted phases for best fit
-rcc_sq = sum(sin(aphi-circ_mean(aphi)) .* sin(bestfit-circ_mean(bestfit)))...
+gof = squeeze(abs(mean(phiPred./aphi)));
+if iscolumn(gof) % happens if nTr = 1
+    gof = gof';
+end
+[~,id] = max(gof,[],2); % get best fit ID
+
+bestfit = nan(size(aphi));
+for iTr = 1:numel(id)
+    bestfit(:,iTr) = squeeze(phiPred(:,iTr,id(iTr))); % get predicted phases for best fit 
+end
+
+
+rcc_sq = sum(cSinVar(aphi) .* cSinVar(bestfit))...
     ./sqrt(...
-    sum(sin(aphi-circ_mean(aphi)).^2) .* sum(sin(bestfit-circ_mean(bestfit)).^2)); % circular correlation for best fit
-rcc_sq = rcc_sq^2;
+    sum(cSinVar(aphi).^2) .* sum(cSinVar(bestfit).^2)); % circular correlation for best fit
+
+rcc_sq = rcc_sq.^2;
+end
+%%
+function out = cSinVar(in)
+% computes the expression sin(angle(in) - circ_mean(angle(in))) for complex
+% input (must all have unit magnitude)
+out = in./mean(in);
+out = imag(out./abs(out));
+
 end

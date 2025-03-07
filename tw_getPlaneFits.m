@@ -22,4 +22,7 @@ b = b(:);
 xi = sqrt(a.^2 + b.^2); % radial parameter / spatial freq
 wvdir = atan2(b,a); 
 phiPred = a.*pos(:,1)' + b.*pos(:,2)'; % predicted phases
+
+phiPred = exp(1i.*phiPred); % convert to complex
+
 end
