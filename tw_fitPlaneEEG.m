@@ -34,7 +34,7 @@ p.addParameter('ROI', {[-0.2 0.2] [-Inf 0.25]});
 p.addParameter('WindowSize', []);
 p.addParameter('MaxCycles', 1);
 p.addParameter('NumStepsSpatFreq', 30);
-p.addParameter('NumStepsWaveDir', 60);
+p.addParameter('NumStepsWaveDir', 30);
 p.addParameter('RandShuffleIter', 10);
 p.addParameter('RandShuffleNTrials', []);
 p.addParameter('RandShuffleTimeStep', 200); % in ms
@@ -83,7 +83,7 @@ end
 
 % Get the phase planes predicted by each fit:
 [phiPred, wvdir, a, b, xi] = tw_getPlaneFits(pos,...
-    p.Results.NumStepsSpatFreq, p.Results.NumStepsSpatFreq, p.Results.MaxCycles);
+    p.Results.NumStepsWaveDir, p.Results.NumStepsSpatFreq, p.Results.MaxCycles);
 % -> first dimension for each is the number of different fits
 
 % Evaluate the fits:
