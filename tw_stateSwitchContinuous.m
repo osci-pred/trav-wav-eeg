@@ -1,4 +1,4 @@
-function out = tw_stateSwitchContinuous(wav, varargin)
+function [state, rTrans, param] = tw_stateSwitchContinuous(wav, varargin)
 % Continuous analysis of state switches (not pre-defining FW and BW states)
 % 
 % input:
@@ -15,18 +15,32 @@ function out = tw_stateSwitchContinuous(wav, varargin)
 % 'TransMinDist'            min distance (in rad) to be covered by a
 %                           state-transition.
 % 'TransMaxDur'             max duration of the state transition (in ms).
+% 'CircCohThresh'           initial threshold for circular coherence in the
+%                           classification of states. This is evaluated from 
+%                           mean direction of all significant fits inside 
+%                           the time-window, so it takes values within [0
+%                           1].
 % 'StateMinDur'             min duration of state (in ms).
 % 'StateInterpMaxDur'       max duration of gap (non-significant fit) to
 %                           interpolate over during stable state.
+% 'ShiftToTransMaxTime'     max distance (in ms) to shift state onset/offset to
+%                           closest rapid transition (after classification)
+% 'DownSampleRate'          rate in Hz to down-sample to in order to speed
+%                           up classification process.
+
 
 p = inputParser();
 p.addParameter('TransThresh', 0.2);
 p.addParameter('TransMaxDur', 100);
 p.addParameter('TransMinDist', pi/4);
+p.addParameter('CircCohThresh', 0.85);
 p.addParameter('StateMinDur', 100);
 p.addParameter('StateInterpMaxDur', 200);
+p.addParameter('ShiftToTransMaxTime', 100); 
+p.addParameter('DownSampleRate', 50); 
 
 p.parse(varargin{:});
+
 
 %% Step 1: detect rapid transitions in the wave direction
 
@@ -75,25 +89,27 @@ end
 %% Step 2: detect stable states
 % wav.sig is boolean indicating whether the fit was considered significant
 
+srLo = p.Results.DownSampleRate;
+[~, tmLo] = resample(wav.wavDir(:,1)', wav.t, srLo); % get time-vector for downsampled signal
 
-maxlen = numel(wav.t);
-minlen = round(p.Results.StateMinDur*1e-3 * sr); 
-
-[xx, yy] = ndgrid(1:numel(wav.t), minlen:maxlen);    
+maxlen = numel(tmLo);
+minlen = round(p.Results.StateMinDur*1e-3 * srLo); 
 
 
-thresh = 0.85; % the initial threshold for circular consistency
+[xx, yy] = ndgrid(1:numel(tmLo), minlen:maxlen);    
+
+
+thresh = p.Results.CircCohThresh; % the initial threshold for circular consistency
 splitStateThresh = 0.85; % threshold for mean boolean inside the triangular mask 
 threshIncr = 0.01; % increment thresh for mask by this amount when splitting states
 pad = 0.015; % pad (secs) inward on either side. 
-% Pad is only applied to the initial classification, on and offsets are
+% Pad is only applied to the initial classification, on and offsets
 % still adjusted after that based on rapid transitions and state overlaps
 
 
-interpDur = p.Results.StateInterpMaxDur*1e-3 * sr; % in samples, how long gap can be to be interpolated
-sigFitThresh = 0.3; % max percentage of non-significant fits within single state
+interpDur = p.Results.StateInterpMaxDur*1e-3 * srLo; % in samples, how long gap can be to be interpolated
 
-shift2TransMaxTime = 0.1; 
+shift2TransMaxTime = p.Results.ShiftToTransMaxTime*1e-3;
 state2TransPad = pad; % after moving onset/offset to nearest transition, keep this distance 
 
 wb = waitbar(0, 'State Classification...');
@@ -102,7 +118,10 @@ for iTr = 1:nTr
     
     waitbar(iTr/nTr, wb, 'State Classification...');
     
-    wd = wav.sig(:,iTr) .* exp(1i.*wav.wavDir(:,iTr));
+    [wdLo, tmLo] = resample(wav.wavDir(:,iTr)', wav.t, srLo);
+    sigLo = interp1(wav.t, double(wav.sig(:,iTr)'), tmLo, 'nearest');
+    
+    wd = sigLo .* exp(1i.*wdLo);
     % convert to complex, using mag to filter out unsignificant fits
     
     for len = maxlen:-1:minlen
@@ -172,8 +191,8 @@ for iTr = 1:nTr
                 threshMap(stateMask1D) = Inf;
                 
                 kState = kState + 1;
-                state(iTr).tm(kState, 1) = wav.t(max(1, dt(1))) + pad;
-                state(iTr).tm(kState, 2) = wav.t(min(numel(wav.t), dt(2))) - pad;
+                state(iTr).tm(kState, 1) = tmLo(max(1, dt(1))) + pad;
+                state(iTr).tm(kState, 2) = tmLo(min(numel(tmLo), dt(2))) - pad;
                 
             end
         end
@@ -195,8 +214,8 @@ for iTr = 1:nTr
     killState = false(1, size(state(iTr).tm,1));
     for iState = 1:size(state(iTr).tm,1)
         
-        stateTimeWindow = (wav.t >= state(iTr).tm(iState,1) & wav.t <= state(iTr).tm(iState,2));
-        sigMask = ~wav.sig(:,iTr)' & stateTimeWindow;
+        stateTimeWindow = (tmLo >= state(iTr).tm(iState,1) & tmLo <= state(iTr).tm(iState,2));
+        sigMask = ~sigLo(:,iTr)' & stateTimeWindow;
         
         lbl = bwlabel(sigMask);
         killGaps = find(arrayfun(@(x) sum(lbl == x)>interpDur, 1:max(lbl)));
@@ -210,7 +229,7 @@ for iTr = 1:nTr
         % -> now a 2xNumGaps matrix with on- and offsets of new states in
         % the first dim
         
-        state(iTr).tm = cat(1, state(iTr).tm, wav.t(killGaps)'); % add new states to the end of the list
+        state(iTr).tm = cat(1, state(iTr).tm, tmLo(killGaps)'); % add new states to the end of the list
         killState(iState) = true; % mark this state for execution
         
         
@@ -280,14 +299,14 @@ for iTr = 1:nTr
 %     % sort out states that are not based on enough significant individual fits:
 %     killState = false(1, size(state(iTr).tm,1));
 %     for iState = 1:size(state(iTr).tm,1)
-%         stateTimeWindow = (wav.t >= state(iTr).tm(iState,1) & wav.t <= state(iTr).tm(iState,2));
+%         stateTimeWindow = (tmLo >= state(iTr).tm(iState,1) & tmLo <= state(iTr).tm(iState,2));
 %         killState(iState) =  mean(~wav.sig(stateTimeWindow,iTr)) > sigFitThresh;
 %     end
 %     state(iTr).tm(killState,:) = [];
     
     
     % finally, we extract parameters for each state:
-    wdFull = exp(1i.*wav.wavDir(:,iTr)); % retrieve the full wave dir (not masked by significance as above)
+    wdFull = exp(1i.*wav.wavDir(:,iTr)); % retrieve the full wave dir, at original sampling rate & not masked by significance as above
     for iState = 1:size(state(iTr).tm,1)
         stateTimeWindow = (wav.t >= state(iTr).tm(iState,1) & wav.t <= state(iTr).tm(iState,2));
         rValid = mean(wdFull(stateTimeWindow & wav.sig(:,iTr)'));
@@ -308,44 +327,10 @@ delete(wb);
 
 
 
-%% add information about neighbouring states to the transition times:
 
-sides = {'pre' 'post'};
-
-for iTr = 1:nTr
-    out.tag{iTr} = zeros(numel(rTrans{iTr}),2);
-    
-    for iSide = 1:2
-        
-        for iTrans = 1:numel(rTrans{iTr})
-            
-            for ist = 1:2
-                
-                st = stateDirs{ist};
-                
-                if isempty(out.(st){iTr})
-                    continue
-                end
-                
-                distCheck = abs(rTrans{iTr}(iTrans)-out.(st){iTr}(:,iSide)) <= p.Results.StateTransTagTol*1e-3;
-                
-                if any(distCheck)
-                    if out.tag{iTr}(iTrans,iSide) ~= 0
-                        error('End of the world') % this shouldn't happen
-                    end
-                    out.tag{iTr}(iTrans,iSide) = ist; % save index [1/2] for {'fw' 'bw'}
-                end
-            end
-            
-        end
-    end
-    
-    out.tag{iTr} = out.tag{iTr}(:,[2 1]); % flip so that first column is preceding state
-end
-out.tagLabels = {'fw' 'bw'};
-
-% save parameters in output:
-out.param = p.Results;
+%%
+% output parameters:
+param = p.Results;
 
 
 
