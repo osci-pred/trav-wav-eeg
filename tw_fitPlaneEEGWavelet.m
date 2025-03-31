@@ -1,4 +1,7 @@
 function out = tw_fitPlaneEEGWavelet(raw, time, labels, varargin)
+% Performs the iterative plane fitting procedure based on a continuous
+% wavelet transform.
+%
 % raw                   eeg input; [nChan x nTime x nTrials];
 % time                  time vector in seconds
 % labels                cell array of electrode labels, conforming to 10/05
@@ -26,7 +29,10 @@ function out = tw_fitPlaneEEGWavelet(raw, time, labels, varargin)
 %                       empty, all trials
 % 'DirClassWindowSize'  window size for classification of wave direction (in radians)
 % 'RandShuffleTimeStep' time step option for shuffling, in ms. 
-
+% 'ReturnPowChan'       (optional) list of electrodes to return power
+%                       spectra for individually (in addition to the mean power across the ROI)
+% 'ReturnWTOnly'        if true, returns after computing the wavelet
+%                       transform
 
 
 p = inputParser();
@@ -40,7 +46,8 @@ p.addParameter('RandShuffleIter', 10);
 p.addParameter('RandShuffleNTrials', []);
 p.addParameter('RandShuffleTimeStep', 200); % in ms
 p.addParameter('DirClassWindowSize', 0.5);
-
+p.addParameter('ReturnPowChan', {});
+p.addParameter('ReturnWTOnly', false);
 p.parse(varargin{:});
 
 %%
@@ -72,28 +79,36 @@ end
 %%
 
 % Get the electrode positions that we want to include in the fit:
-[pos, lbl, idxInData] = tw_getElecPos(labels, 'EEG1005', p.Results.ROI);
+[pos, lbl, idxInData, powIdx] = tw_getElecPos(labels, 'EEG1005', p.Results.ROI, p.Results.ReturnPowChan);
+
 
 % Get the indices for the midline electrodes (not used in the fit):
 [midLine, midLineLabel, midLineIdxInData] = tw_getMidLine(lbl, idxInData);
 
 % Filter the data and extract phases:
-[phi, pow, freq] = getWT(raw(idxInData,:,:), sr, p.Results.WaveletArgs);
+[phi, freq, avgPow, chanPow] = getWT(raw(idxInData,:,:), sr, p.Results.WaveletArgs, powIdx);
 
-% Convert moving mean window sizes to samples using freq vector:
-movMeanWinSize = p.Results.WindowSize .* (sr./freq);
-
-
-% Get the phase planes predicted by each fit:
-[phiPred, wvdir, a, b, xi] = tw_getPlaneFits(pos, ...
-    p.Results.NumStepsWaveDir, p.Results.NumStepsSpatFreq, p.Results.MaxCycles);
-% -> first dimension for each is the number of different fits
-
-% Evaluate the fits:
-[id, rcc_sq] = evalPlaneFitsWT(phi, phiPred, movMeanWinSize,...
-    p.Results.RandShuffleIter, shuffleTrials, shTm);
-
-
+if p.Results.ReturnWTOnly
+    % Optional return after WT computation (to do initial processing before fitting or re-analysis splits)
+    
+    [wvdir, a, b, xi, id, rcc_sq] = deal([]);
+    
+else
+    
+    % Convert moving mean window sizes to samples using freq vector:
+    movMeanWinSize = p.Results.WindowSize .* (sr./freq);
+    
+    
+    % Get the phase planes predicted by each fit:
+    [phiPred, wvdir, a, b, xi] = tw_getPlaneFits(pos, ...
+        p.Results.NumStepsWaveDir, p.Results.NumStepsSpatFreq, p.Results.MaxCycles);
+    % -> first dimension for each is the number of different fits
+    
+    % Evaluate the fits:
+    [id, rcc_sq] = evalPlaneFitsWT(phi, phiPred, movMeanWinSize,...
+        p.Results.RandShuffleIter, shuffleTrials, shTm);
+    
+end
 
 % [fw, bw] = tw_classifyDirection(wvdir(id), p.Results.DirClassWindowSize);
 
@@ -126,12 +141,15 @@ out.rcc_sq = rcc_sq;
 out.midLineIdx = midLine;
 out.midLineIdxInData = midLineIdxInData;
 out.midLineLabel = midLineLabel;
-out.pow = pow;
+out.avgPow = avgPow;
+out.chanPow = permute(chanPow, [2 3 4 1]);
+out.chanPowLbl = lbl(powIdx);
 
+out.param = p.Results;
 %%
 end
 %%
-function [phi, pow, freq] = getWT(raw, sr, wtArgs)
+function [phi, freq, avgPow, chanPow] = getWT(raw, sr, wtArgs, powIdx)
 % return the CWT
 % raw is raw eeg signal as [nChan x nTime x nTrials]
 % wtArgs is a cell array of optional additional arguments to the cwt
@@ -163,15 +181,19 @@ for itrial = 1:nTr
 end
 delete(wb);
 
+outwt = outwt(:,end:-1:1, :, :); % flip frequency dimension
 
-outwt = abs(outwt) ... % retain magnitude
-    .* exp(1i.*angle(outwt./mean(outwt,1))); % correct phase by mean phase across elecs per timepoint
+
+% return magnitude/power:
+avgPow = squeeze(mean(abs(outwt),1));
+chanPow = abs(outwt(powIdx, :, :, :));
+
+
+phi = outwt./abs(outwt);
+mphi = mean(phi,1)./abs(mean(phi,1));
+phi = phi./mphi; %  correct phase by mean phase across elecs per timepoint
 % -> now we can average over time (within short windows)
 
-outwt = outwt(:,end:-1:1, :, :); % flip frequency dimension
-phi = outwt./abs(outwt);
-
-pow = squeeze(mean(abs(outwt),1));
 
 end
 %%
@@ -217,7 +239,6 @@ function [id, rcc_sq] = evalPlaneFitsWT(phi, phiPred, movMeanWinSize, nIter, shu
 
 phiPred = repmat(phiPred, 1,1,1, nTr); % expand predicted phases to freq dimension
 phiPred = permute(phiPred, [2 3 4 1]); % move fit dimension to the end
-phiPred = exp(1i.*phiPred); % convert to complex to speed up computations
 
 wb = waitbar(0, {sprintf('Wave Fit: Timepoint %d/%d', 0,nTm), '~~~ >> ??? << ~~~'});
 
@@ -226,25 +247,25 @@ movAvg = zeros(1,nFreq, 2*winHW+1);
 movAvg(1,:,:) = (-winHW:winHW) > -movMeanWinSize./2 & (-winHW:winHW) < movMeanWinSize./2;
 
 for iT = 1:nTm
-%     movAvg = zeros(1,nFreq, nTm);
-%     movAvg(1,:,:) = movAvgIdx(iT);
+    %     movAvg = zeros(1,nFreq, nTm);
+    %     movAvg(1,:,:) = movAvgIdx(iT);
     
     waitbar(iT/nTm,wb, {sprintf('Wave Fit: Timepoint %d/%d', iT, nTm), '~~~ >> ??? << ~~~'});
     
-%     for itrial = 1:nTr
-tIdx = iT + (-winHW:winHW);
-tIdx = tIdx(tIdx > 1 & tIdx < nTm);
-
-            aphi = squeeze(mean(phi(:,:,tIdx,:).*movAvg(:,:,tIdx-iT+winHW+1),3)); % -> elec x freq
-            aphi = aphi./abs(aphi); % discard magnitude of average
-%         aphi = angle(mean(gwt(:,:,:,itrial).*movAvg,3)); % -> elec x freq
-        [id(:,iT,:), rcc_sq(:,iT,:)] = singleFitEval(aphi, phiPred);
-%         phi_out(:,iT,itrial) = aphi;
-%     end
+    %     for itrial = 1:nTr
+    tIdx = iT + (-winHW:winHW);
+    tIdx = tIdx(tIdx >= 1 & tIdx <= nTm);
     
-%     if ismember(itrial, shuffleTrials)
-%         for iT = shTm
-%             for iter = 1:nIter
+    aphi = squeeze(mean(phi(:,:,tIdx,:).*movAvg(:,:,tIdx-iT+winHW+1),3)); % -> elec x freq
+    aphi = aphi./abs(aphi); % discard magnitude of average
+    
+    [id(:,iT,:), rcc_sq(:,iT,:)] = singleFitEval(aphi, phiPred);
+    %         phi_out(:,iT,itrial) = aphi;
+    %     end
+    
+    %     if ismember(itrial, shuffleTrials)
+    %         for iT = shTm
+    %             for iter = 1:nIter
 %                 rphi = squeeze(circ_mean(phi_rand(:,movAvgIdx(iT),itrial,iter), [], 2));
 %                 [~, rcc_sq_rand(iT,itrial,iter)] = singleFitEval(rphi, phiPred);
 %             end
@@ -260,15 +281,22 @@ delete(wb);
 end
 %%
 function [id, rcc_sq] = singleFitEval(aphi, phiPred)
-% gof = squeeze(sqrt(mean(cos(phiPred-aphi)).^2 + mean(sin(phiPred-aphi)).^2)); % mean vector length of residuals (-> ie offset is ignored)
+% gof = squeeze(sqrt(mean(cos(phiPred-aphi)).^2 + mean(sin(phiPred-aphi)).^2)); 
 
-gof = squeeze(abs(mean(phiPred./aphi)));
+gof = squeeze(abs(mean(phiPred./aphi))); % mean vector length of residuals (-> ie offset is ignored)
 
 [~,id] = max(gof, [], 3); % get best fit ID
 
 bestfit = nan(size(aphi));
 for iTr = 1:size(id,2)
     bestfit(:,:,iTr) = squeeze(phiPred(:,1,iTr,id(:,iTr))); % get predicted phases for best fit (freq dim is redundant)
+end
+
+bestfit = nan(size(aphi));
+for iFreq = 1:size(id,1)
+    for iTr = 1:size(id,2)
+        bestfit(:,iFreq,iTr) = squeeze(phiPred(:,1,iTr,id(iFreq,iTr))); % get predicted phases for best fit (freq dim is redundant)
+    end
 end
 
 

@@ -31,9 +31,12 @@ nRows = numel(defrows);
 nCols = numel(defcols);
 
 [rr, cc] = ndgrid(1:nRows, 1:nCols);
+drows = reshape(defrows(rr(:)), 1, []);
+dcols = reshape(defcols(cc(:)), 1, []);
 
 
-set = cellfun(@(x,y) [x y], defrows(rr(:)), defcols(cc(:)), 'UniformOutput', false);
+
+set = cellfun(@(x,y) [x y], drows, dcols, 'UniformOutput', false);
 
 if nargin > 4
     set = unique([set extra]);

@@ -1,4 +1,4 @@
-function [pos, lbl, idxInData] = tw_getElecPos(labels, layout, roi)
+function [pos, lbl, idxInData, powIdx] = tw_getElecPos(labels, layout, roi, powlabels)
 
 assert(iscell(roi), 'ROI ill-defined. Pass cell array of electrode labels or ROI box coordinates.')
 lay = ft_prepare_layout(struct('layout', layout));
@@ -24,5 +24,19 @@ end
 pos = lay.pos(idxInLay,:);
 pos = pos - mean(pos); % center on zero/zero
 lbl = labels(idxInData);
+
+
+% get indices for additional elecs we want to return the powerspectra for:
+if nargin < 4 || isempty(powlabels)
+    powIdx = [];
+    return
+end
+
+if ~iscell(powlabels)
+   powlabels = {powlabels}; 
+end
+
+[~, powIdx] = ismember(powlabels, lbl);
+powIdx = powIdx(powIdx > 0);
 
 end
